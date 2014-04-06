@@ -1,0 +1,426 @@
+<!doctype html>
+<html>
+	<head>
+		<title>learningthree.js boiler plate for three.js</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+
+		<script src="https://rawgithub.com/mrdoob/three.js/master/build/three.js"></script>
+		<script src="montainsArena.js"></script>
+		<script type="text/javascript" src="TrackballControls.js"></script>
+		<script src="vendor/three.js/Detector.js"></script>
+		<!-- https://github.com/mrdoob/stats.js -->
+		<script src="vendor/three.js/Stats.js"></script>
+
+		<script src="vendor/threex/THREEx.screenshot.js"></script>
+		<script src="vendor/threex/THREEx.FullScreen.js"></script>
+		<script src="vendor/threex/THREEx.WindowResize.js"></script>
+		<script src="vendor/threex.dragpancontrols.js"></script>
+
+		<link  href="css/main.css" rel="stylesheet"/>
+	</head>
+<body>
+	<!-- three.js container -->
+    	<div id="container"></div>
+	<!-- info on screen display -->
+	<div id="info">
+		<div class="top">
+			<a href="http://learningthreejs.com/blog/2011/12/20/boilerplate-for-three-js/" target="_blank">
+			Lucas McHacks Workspace</a>
+			<p id="debugger"></p>
+			<p id="Speed">Aircraft Speed: </p>
+			<p id="Lifting Force">Lifting Force: </p>
+			<p id="Score">0</p>
+
+		</div>
+		<div class="bottom" id="inlineDoc" >
+			- <i>p</i> to screenshot
+		</div>
+	</div>
+
+	<script type="text/javascript">
+		var stats, scene, renderer;
+		var camera, cameraControls;
+
+		var ground;
+		var ball;
+		var skyBox;
+		var mountains;
+
+		var planedirection = new THREE.Vector3(0,0,0);
+		var airplanescale = 0.5;
+
+		var airplane;
+		var wheelComp;
+		var wheelComp2;
+		var wing;
+		var flaps;
+		var wholetail;
+		var tip;
+
+		var runway;
+
+		var camerax = 0;
+		var cameray = 5;
+		var cameraz = 10;
+
+		var velocity = 0//new THREE.Vector3(0,0,0);
+
+		var events = {};
+
+		if( !init() )	animate();
+
+		// init the scene
+		function init(){
+
+			if( Detector.webgl ){
+				renderer = new THREE.WebGLRenderer({
+					antialias		: true,	// to get smoother output
+					preserveDrawingBuffer	: true	// to allow screenshot
+				});
+				renderer.setClearColor( 0xBBBBBB, 1 );
+
+			}else{
+				Detector.addGetWebGLMessage();
+				return true;
+			}
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setClearColor( 0xAAAAAA, 1.0 );
+			renderer.gammaInput = true;
+			renderer.gammaOutput = true;
+			document.getElementById('container').appendChild(renderer.domElement);
+
+			// add Stats.js - https://github.com/mrdoob/stats.js
+			stats = new Stats();
+			stats.domElement.style.position	= 'absolute';
+			stats.domElement.style.bottom	= '0px';
+			document.body.appendChild( stats.domElement );
+
+			// create a scene
+			scene = new THREE.Scene();
+
+			//Lights
+			scene.add( new THREE.AmbientLight( 0x333333 ) );
+
+			var light = new THREE.DirectionalLight( 0xFFFFFF, 0.9 );
+			light.position.set( -1300, 700, 1240 );
+
+			scene.add( light );
+
+			light = new THREE.DirectionalLight( 0xFFFFFF, 0.7 );
+			light.position.set( 1000, -500, -1200 );
+
+			scene.add( light );
+			//
+
+			// put a camera in the scene
+			camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 10000 );
+			camera.position.set(camerax, 1000, 1500);
+			scene.add(camera);
+
+			// create a camera contol
+			cameraControls	= new THREE.TrackballControls(camera);
+
+			// transparently support window resize
+			THREEx.WindowResize.bind(renderer, camera);
+			// allow 'p' to make screenshot
+			THREEx.Screenshot.bindKey(renderer);
+			// allow 'f' to go fullscreen where this feature is supported
+			if( THREEx.FullScreen.available() ){
+				THREEx.FullScreen.bindKey();
+				document.getElementById('inlineDoc').innerHTML	+= "- <i>f</i> for fullscreen";
+			}
+
+			var groundgeo = new THREE.PlaneGeometry( 3500,4500,10,10);
+			var groundtexture = new THREE.ImageUtils.loadTexture('images/groundtexture.jpg');
+			groundtexture.wrapS = groundtexture.wrapT = THREE.RepeatWrapping;
+			groundtexture.repeat.set( 10, 10 );
+			var groundmaterial	= new THREE.MeshBasicMaterial({map: groundtexture});
+			groundmaterial.side = THREE.DoubleSide;
+			ground	= new THREE.Mesh( groundgeo, groundmaterial);
+			ground.position.y -= 10 * airplanescale;//
+			ground.rotation.x = Math.PI/2;
+			scene.add( ground );
+
+			var runwaygeo = new THREE.PlaneGeometry( 1000, 4500, 10, 100 );
+			var runtext = new THREE.ImageUtils.loadTexture('images/runway.jpg');
+			runtext.wrapS = runtext.wrapT = THREE.RepeatWrapping;
+			runtext.repeat.set(10,100)
+			runtext.anisotropy = 0;
+			runtext.anisotropy = renderer.getMaxAnisotropy();
+			var runwaymat = new THREE.MeshBasicMaterial( {map: runtext} );
+			runwaymat.side = THREE.DoubleSide;
+			runway = new THREE.Mesh(runwaygeo, runwaymat);
+			runway.position.y = ground.position.y + 1.5;
+			runway.rotation.x = Math.PI/2;
+
+			scene.add(runway);
+
+			mountains = new THREEx.MontainsArena();
+			mountains.scale.set(4000,4000,4000);
+			scene.add(mountains);
+
+
+			var path = "images/";
+			var urls = [path + "px.jpg", path + "nx.jpg",
+						path + "py.jpg", path + "ny.jpg",
+						path + "pz.jpg", path + "nz.jpg" ];
+			skyBox = THREE.ImageUtils.loadTextureCube( urls );
+			skyBox.format = THREE.RGBFormat;
+			var shader = THREE.ShaderLib.cube;
+			shader.uniforms.tCube.value = skyBox;
+			var skyMaterial = new THREE.ShaderMaterial( {
+				fragmentShader: shader.fragmentShader,
+				vertexShader: shader.vertexShader,
+				uniforms: shader.uniforms,
+				depthWrite: false,
+				side: THREE.BackSide
+			} );
+
+			var sky = new THREE.Mesh( new THREE.CubeGeometry( 8000, 8000, 8000 ), skyMaterial );
+			sky.position.y += 3900;
+			scene.add( sky );
+
+			createAirPlane();
+
+			document.addEventListener('keydown', okd, false);
+			document.addEventListener('keyup', oku, false);
+
+		}
+
+		function createAirPlane(){
+			var tex = THREE.ImageUtils.loadTexture('images/planetexture.jpg');
+			var coreMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa, map: tex , envMap: skyBox}); //color: 0xBBBBBB
+			var wingMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa, map: tex , envMap: skyBox});
+			var legMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa, map: tex , envMap: skyBox});
+			var wheelMaterial = new THREE.MeshBasicMaterial({color: 0x000000});
+			var flapMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa, map: tex ,envMap: skyBox});
+			var tipMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa, map: tex , envMap: skyBox});
+			var endPieceMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa, map: tex , envMap: skyBox});
+			var tailMaterial = new THREE.MeshPhongMaterial({color: 0xffffff, specular:0xffaaaa ,envMap: skyBox});
+
+			var legGeometry = new THREE.CubeGeometry(2,12,2);
+			var coreGeometry = new THREE.CylinderGeometry(5,5,50,32);
+			var wingGeometry = new THREE.CubeGeometry(45,2,7);
+			var wingEdgeGeo = new THREE.CubeGeometry(5,2,12);
+			var wheelGeometry = new THREE.TorusGeometry(2, 1, 16, 100);
+			var flapGeometry = new THREE.CubeGeometry(7,1,3);
+			var tipGeometry = new THREE.CylinderGeometry(5.1,0,10,32);
+			var endPieceGeometry = new THREE.CylinderGeometry(3,3,5,32);
+			var tailGeometry = new THREE.CylinderGeometry(4,1,10,32);
+
+			var endPiece = new THREE.Mesh(endPieceGeometry, endPieceMaterial);
+			var tail = new THREE.Mesh(tailGeometry,tailMaterial);
+			tail.rotation.x = Math.PI/2;
+			tail.position.z = 3;
+
+			wholetail = new THREE.Object3D();
+			wholetail.add(endPiece);
+			wholetail.add(tail);
+			wholetail.position.y = 6;
+			wholetail.position.z = 23;
+
+			var flap1 = new THREE.Mesh(flapGeometry, flapMaterial);
+			var flap2 = new THREE.Mesh(flapGeometry, flapMaterial);
+			flap1.position.x = 15;
+			flap1.position.y = 1;
+			flap2.position.x = -15;
+			flap2.position.y = 1;
+
+			flap = new THREE.Object3D();
+			flap.position.y += 0.7;
+
+			flap.add(flap1);
+			flap.add(flap2);
+
+			var wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+			wheel1.rotation.y = Math.PI/2;
+			wheel1.position.x = 5;
+			wheel1.position.y = -7;
+			var wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+			wheel2.rotation.y = Math.PI/2;
+			wheel2.position.x = -5;
+			wheel2.position.y = -7;
+
+			var leg1 = new THREE.Mesh(legGeometry, legMaterial);
+			leg1.position.y = -3;
+			leg1.rotation.z = Math.PI/4;
+			var leg2 = new THREE.Mesh(legGeometry, legMaterial);
+			leg2.position.y = -3;
+			leg2.rotation.z = -Math.PI/4;
+
+			wheelComp = new THREE.Object3D();
+			wheelComp.add(leg1);
+			wheelComp.add(leg2);
+			wheelComp.add(wheel1);
+			wheelComp.add(wheel2);
+
+			wheelComp.position.z = -7;
+			wheelComp2 = wheelComp.clone();
+			wheelComp2.position.z = 10;
+
+			var core = new THREE.Mesh(coreGeometry, coreMaterial);
+			core.rotation.x = Math.PI/2;
+
+			tip = new THREE.Mesh(tipGeometry, tipMaterial);
+			tip.position.z = -30;
+			tip.rotation.x = Math.PI/2;
+
+			var wingEdge1 = new THREE.Mesh(wingEdgeGeo, wingMaterial);
+			var wingEdge2 = new THREE.Mesh(wingEdgeGeo, wingMaterial);
+			wingEdge1.position.x = 25;
+			wingEdge1.rotation.y = Math.PI/4;
+			wingEdge1.position.z += 3;
+			wingEdge2.position.x = -25;
+			wingEdge2.rotation.y = -Math.PI/4;
+			wingEdge2.position.z += 3;
+
+
+			wing = new THREE.Mesh(wingGeometry, wingMaterial);
+			wing.add(wingEdge1);
+			wing.add(wingEdge2);
+			wing.add(flap);
+			wing.position.y = 5;
+			wing.position.z = -4;
+
+			airplane = new THREE.Object3D();
+			airplane.add(wheelComp);
+			airplane.add(wheelComp2);
+			airplane.add(core);
+			airplane.add(wing);
+			airplane.add(tip);
+			airplane.add(wholetail);
+
+			//airplane.position.y = 15;
+			scene.add(airplane);
+			airplane.scale.set(airplanescale, airplanescale, airplanescale);
+			airplane.position.y = 0;
+			airplane.position.z = 1000;
+
+		}
+
+		function okd(e){
+			events[e.keyCode] = true;
+		}
+		function oku(e){
+			delete events[e.keyCode];
+		}
+
+		function animate() {
+			requestAnimationFrame( animate );
+
+			movePlane();
+			if (airplane.position.y > 5){
+				retrackWheels();
+			}
+			if (airplane.position.y < 5){
+				landing();
+			}
+			tmp = new THREE.Vector3(0,0,0);
+			tmp.addVectors(tip.position, airplane.position);
+
+			airplane.updateMatrixWorld();
+			var vector = new THREE.Vector3();
+			vector.setFromMatrixPosition(tip.matrixWorld);
+
+			planedirection.subVectors(vector,airplane.position);
+			planedirection.normalize();
+			cameraControls.update();
+			//camera.position.set(airplane.position.x, airplane.position.y +75, airplane.position.z + 300 );
+			//camera.position.set(0, 0 , 0 );
+
+			render();
+
+			stats.update();
+		}
+
+		function render() {
+
+			renderer.render( scene, camera );
+		}
+
+		function retrackWheels(){
+			if (wheelComp.rotation.x > -1*Math.PI/2){
+				wheelComp.rotation.x -= 0.01;
+				wheelComp2.rotation.x -= 0.01;
+			}
+		}
+
+		function landing(){
+			if (wheelComp.rotation.x < 0){
+				wheelComp.rotation.x += 0.01;
+				wheelComp2.rotation.x += 0.01;
+			}
+		}
+
+		function sideRotation(sign){
+			if (airplane.position.y < 10){
+				document.getElementById('debugger').innerHTML = "Too Low to Spin!";
+			}
+			else if (airplane.rotation.z < Math.PI/2 && sign > 0){
+				airplane.rotation.z += sign * Math.PI/36;
+				airplane.rotation.y += sign * Math.PI/36;
+			}
+			else if (airplane.rotation.z > -1*Math.PI/2 && sign < 0){
+				airplane.rotation.z += sign * Math.PI/36;
+				airplane.rotation.y += sign * Math.PI/36;
+			}
+			else if(Math.abs(airplane.rotation.z) > Math.PI/2){
+				document.getElementById('debugger').innerHTML = "Can't Rotate Anymore!";
+			}
+
+		}
+
+		function upRotation(sign){
+			if (velocity < 0.8){
+				document.getElementById('debugger').innerHTML = "Not Moving fast enough to takeoff!";
+			}
+			else if (airplane.rotation.x < Math.PI/4 && sign > 0){
+				airplane.rotation.x += sign * Math.PI/36;
+				airplane.position.y += 3;
+			}
+			else if (airplane.rotation.x > -1*Math.PI/4 && sign < 0){
+				airplane.rotation.x += sign * Math.PI/36;
+				airplae.position.y -= 3;
+			}
+		}
+
+
+		function movePlane(){
+			if (37 in events){
+				sideRotation(1);
+			}
+			if (38 in events){
+				if (velocity < 1){
+					velocity += 0.1;
+				}
+			}
+			if (39 in events){
+				sideRotation(-1);
+			}
+			if (40 in events){
+				//velocity.z += 3;
+			}
+
+			if (88 in events){
+				upRotation(-1);
+				flap.rotation.x -= 0.01;
+			}
+			if (90 in events){
+				upRotation(1);
+				flap.rotation.x += 0.01;
+			}
+
+			airplane.position.addVectors(airplane.position, planedirection.multiplyScalar(velocity));
+
+
+
+
+		}
+
+
+
+	</script>
+</body>
+</html>
